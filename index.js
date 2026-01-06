@@ -1065,26 +1065,33 @@ bot.on('callback_query', async (call) => {
 
         country_assignment_locks[country].add(userId);
 
-        // ⚡ SMOOTH SCALE ANIMATION - Pure Visual (ছোট→বড়→ছোট→বড়)
+        // ⚡ Get current message text (যা এখন screen এ আছে)
+        const currentMsg = call.message.text || call.message.caption || "";
+        
+        // ⚡ ছোট version (শুধু number দেখাবে)
         const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
+        const smallFormat = `${current.flag} <b>${current.country}</b>\n\n<code>${originalNumber}</code>`;
         
-        
+        // ⚡ বড় version (full format - current message)
+        const bigFormat = currentMsg;
 
-        // ⚡ Start animation in background
+        // ⚡ Animation: ছোট→বড়→ছোট→বড়
+        const frames = [smallFormat, bigFormat, smallFormat, bigFormat];
+        
         let frameIndex = 0;
         const animationInterval = setInterval(async () => {
-            if (frameIndex < scaleFrames.length) {
+            if (frameIndex < frames.length) {
                 try {
-                    await safeEditMessage(chatId, msgId, scaleFrames[frameIndex], { parse_mode: 'HTML' });
+                    await safeEditMessage(chatId, msgId, frames[frameIndex], { parse_mode: 'HTML' });
                 } catch (e) {}
                 frameIndex++;
             } else {
                 clearInterval(animationInterval);
             }
-        }, 200); // 200ms per frame = 0.8 second total
+        }, 250); // 250ms x 4 = 1 second total
 
         try {
-            // ⚡ Parallel database operations
+            // ⚡ Database কাজ background এ
             const [_, availableNumbers] = await Promise.all([
                 NumberModel.updateOne(
                     { _id: current._id },
@@ -1096,8 +1103,8 @@ bot.on('callback_query', async (call) => {
                 ])
             ]);
 
-            // ⚡ Wait for animation to complete (minimum 800ms)
-            await new Promise(resolve => setTimeout(resolve, 850));
+            // ⚡ Animation শেষ হওয়ার জন্য wait
+            await new Promise(resolve => setTimeout(resolve, 1050));
             clearInterval(animationInterval);
 
             if (availableNumbers.length > 0) {
