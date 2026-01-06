@@ -1,1075 +1,214 @@
-/* ========= Number Bot (Optimized: High Concurrency + Smooth Animation) =========== */
-
-const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
-const request = require('request');
-const countryEmoji = require('country-emoji');
-const mongoose = require('mongoose');
+const TelegramBot = require("node-telegram-bot-api");
 
-// ===============================================
-// ✅ কনফিগারেশন
-// ===============================================
-const BOT_TOKEN = '7142079092:AAGRrSPa3su8iuGG4r9n5x1LZOwsFPaFoQ0';
-const AUTHORIZED_BOT_ID = 8320415016;
-const OTP_GROUP_URL = "https://t.me/RX_ALL_OTP_GROUP";
+// ============================================================
+// ⚙️ ADMIN CONFIGURATION
+// ============================================================
+const ADMIN_IDS = ["6006322754", "6135656510", "1817149496"];
 
-const GITHUB_USERNAME = "yeiemwpshyienga";
-const GITHUB_REPO_NAME = "smszone";
-const GITHUB_FILE_PATH = "users.json";
+// ============================================================
+// 🤖 BOT CONFIGURATION (ALL TOKENS HERE)
+// ============================================================
+const BOT_TOKENS = {
+    // Bot 1: Notification Bot (Group/Channel এ সব SMS পাঠাবে)
+    NOTIFICATION_BOT: "7994972018:AAHpfIJZl8zu9j1gtX392vgCIu7RT4sKokU",
 
-const NUMBER_DB_URI = "mongodb+srv://rakibkhan625162_db_user:sabbir123@number.qdza7vx.mongodb.net/Number?retryWrites=true&w=majority";
-const USER_DB_URI = "mongodb+srv://sabbirrehman905_db_user:sabbir123@userjson.f0vppgx.mongodb.net/UserDB?appName=Userjson";
-
-const USER_LIST_FILE = 'users.json';
-
-const REQUIRED_CHANNELS = [
-    { id: -1003009541400, url: "https://t.me/techzonebd61" },
-    { id: -1002383249427, url: "https://t.me/+SGQCjEiIu_ZlY2Vl" },
-    { id: -1002245233356, url: "https://t.me/+9rmkIBmkZ3M0ZWVl" },
-];
-
-const ADMIN_IDS = [1817149496, 6135656510, 7802680600, 6006322754];
-const SUPPORT_USERNAME = "unknown15x";
-const COOLDOWN_TIME = 2;
-
-// ===============================================
-// 🆕 মেসেজ টেমপ্লেট
-// ===============================================
-const NEW_FOOTER_QUOTE = "<blockquote>📢 এই নাম্বারে 𝐎𝐓𝐏 পাঠানোর পর বটেই 𝐎𝐓𝐏 পাবেন। যদি বটে 𝐎𝐓𝐏 না আসে তাহলে 𝐎𝐓𝐏 গ্রুপে 𝐎𝐓𝐏 পাবেন।🌸\n🔸━━━━𝐒𝐭𝐚𝐲 𝐖𝐢𝐭𝐡 𝐔𝐬━━━━🔸</blockquote>";
-
-const ASSIGNMENT_MESSAGE_TEMPLATE = (flag, country_name, number, action_text, footer) => `\
-${flag} <b>${country_name}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>${action_text}:</b>
-
-📱 𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:
-┗━━ <code>${number}</code> ━━┛
-
-┏━━━━━━━━━━━━━┓ 
-    ⏳ 𝐖𝐚𝐢𝐭𝐢𝐧𝐠 𝐅𝐨𝐫 𝐎𝐓𝐏...ok dan
-┗━━━━━━━━━━━━━┛
-━━━━━━━━━━━━━━━━━
-${footer}
-`;
-
-
-
-
-
-// ===============================================
-// 🗄️ DATABASE CONNECTION SETUP
-// ===============================================
-const dbOptions = {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    family: 4,
-    maxPoolSize: 150,
-    minPoolSize: 10,
-    connectTimeoutMS: 10000,
+    // Bot 2: User Bot (Users দের Private OTP পাঠাবে + Number Bot)
+    USER_BOT: "8320415016:AAGSfutZtPUs8cSB0rD-WQTiprXbBC1Azgc"
 };
 
-const numberConn = mongoose.createConnection(NUMBER_DB_URI, dbOptions);
-numberConn.on('connected', () => console.log("✅ Number DB Connected!"));
+const GROUP_LINKS = {
+    OTP_GROUP_ID: "-1003418731250",
+    MAIN_CHANNEL_LINK: "https://t.me/RX_ALL_NUMBER_PANEL",
+    NUMBER_PANEL_LINK: "https://t.me/smszone1bot"
+};
 
-const userConn = mongoose.createConnection(USER_DB_URI, dbOptions);
-userConn.on('connected', () => {
-    console.log("✅ User & Config DB Connected!");
-    syncSystem();
-});
+// ============================================================
+// 🗄️ MONGODB CONFIGURATION
+// ============================================================
+// Number Bot এর জন্য USER_DB_URI
+const USER_DB_URI = "mongodb+srv://sabbirrehman905_db_user:sabbir123@userjson.f0vppgx.mongodb.net/UserDB?appName=Userjson";
 
-// --- Schemas ---
-const numberSchema = new mongoose.Schema({
-    number: { type: String, unique: true, required: true },
-    country: { type: String, required: true },
-    flag: { type: String, default: "🌍" },
-    status: { type: String, enum: ['Available', 'Used', 'Used_History'], default: 'Available' },
-    assigned_to: { type: Number, default: null },
-    assigned_at: { type: Date, default: null },
-    created_at: { type: Date, default: Date.now }
-});
-const NumberModel = numberConn.model('Number', numberSchema);
+// OTP Workers এর জন্য NUMBER_DB_URI
+const NUMBER_DB_URI = "mongodb+srv://rakibkhan625162_db_user:sabbir123@number.qdza7vx.mongodb.net/Number?retryWrites=true&w=majority";
 
-const userSchema = new mongoose.Schema({
-    userId: { type: Number, unique: true, required: true },
-    joined_at: { type: Date, default: Date.now }
-});
-const UserModel = userConn.model('User', userSchema);
+// ============================================================
+// 🎨 LOGGING SYSTEM (Time Removed)
+// ============================================================
+const colors = {
+    reset: "\x1b[0m", bright: "\x1b[1m", green: "\x1b[32m",
+    yellow: "\x1b[33m", cyan: "\x1b[36m", red: "\x1b[31m", blue: "\x1b[34m"
+};
 
-const configSchema = new mongoose.Schema({
-    key: { type: String, unique: true, required: true },
-    value: { type: String, required: true }
-});
-const ConfigModel = userConn.model('Config', configSchema);
+function log(source, msg, type = 'info') {
+    // Time variable removed here
+    let color = colors.green, icon = "🔹";
+    if (type === 'error') { color = colors.red; icon = "❌"; }
+    else if (type === 'sms') { color = colors.cyan; icon = "📩"; }
+    else if (type === 'warn') { color = colors.yellow; icon = "⚠️"; }
+    else if (type === 'success') { color = colors.green; icon = "✅"; }
 
-// --- ভেরিয়েবল ---
-const bot = new TelegramBot(BOT_TOKEN, { 
-    polling: { 
-        interval: 100,
-        autoStart: true,
-        params: {
-            timeout: 10
+    // Console log format updated to remove [time]
+    console.log(`${colors.bright}${color}${icon} [${source}]${colors.reset} ${msg}`);
+}
+
+// ============================================================
+// 📢 ERROR REPORTING TO ADMINS
+// ============================================================
+let adminBot = null;
+
+async function initAdminBot() {
+    try {
+        adminBot = new TelegramBot(BOT_TOKENS.USER_BOT, { polling: false });
+        log("SYSTEM", `Admin error reporting enabled for ${ADMIN_IDS.length} admins!`, "success");
+    } catch (e) {
+        console.error("Failed to init admin bot:", e.message);
+    }
+}
+
+async function reportErrorToAdmin(source, errorMessage) {
+    if (!adminBot || ADMIN_IDS.length === 0) return;
+
+    const text = `❌ <b>ERROR ALERT</b>\n\n📍 <b>Source:</b> ${source}\n⚠️ <b>Error:</b>\n<pre>${errorMessage.substring(0, 3000)}</pre>`;
+
+    for (const adminId of ADMIN_IDS) {
+        try {
+            await adminBot.sendMessage(adminId, text, { parse_mode: "HTML" });
+            log("ADMIN-NOTIFY", `Error report sent to admin ${adminId}`, "success");
+        } catch (e) {
+            console.error(`${colors.red}Failed to send error to admin ${adminId}: ${e.message}${colors.reset}`);
         }
-    } 
-});
+    }
+}
 
-// ===============================================
-// 🛡️ ERROR HANDLING
-// ===============================================
-bot.on('polling_error', (error) => {
-    console.log(`[Polling Error] ${error.code}: ${error.message}`);
+// ============================================================
+// 🚀 LOAD NUMBER BOT
+// ============================================================
+function loadNumberBot() {
+    const numberBotPath = path.join(__dirname, 'Number', 'number-bot.js');
+
+    if (!fs.existsSync(numberBotPath)) {
+        const errMsg = "❌ Number Bot file not found at: Number/number-bot.js";
+        log("SYSTEM", errMsg, "error");
+        reportErrorToAdmin("NUMBER BOT LOADER", errMsg);
+        return;
+    }
+
+    try {
+        log("SYSTEM", "Loading Number Bot...", "warn");
+
+        // Number Bot কে config pass করা
+        global.NUMBER_BOT_CONFIG = {
+            BOT_TOKEN: BOT_TOKENS.USER_BOT,
+            USER_DB_URI: USER_DB_URI,
+            NUMBER_DB_URI: NUMBER_DB_URI,
+            OTP_GROUP_URL: GROUP_LINKS.MAIN_CHANNEL_LINK
+        };
+
+        require(numberBotPath);
+        log("NUMBER-BOT", "Started Successfully!", "success");
+    } catch (error) {
+        const errMsg = `Critical Load Error: ${error.message}\n${error.stack}`;
+        log("NUMBER-BOT", errMsg, "error");
+        reportErrorToAdmin("NUMBER BOT LOAD", errMsg);
+    }
+}
+
+// ============================================================
+// 📂 LOAD OTP WORKERS FROM 'otp' FOLDER
+// ============================================================
+function loadOtpWorkers() {
+    const otpFolder = path.join(__dirname, 'otp');
+
+    if (!fs.existsSync(otpFolder)) {
+        const msg = "❌ 'otp' folder not found! Creating it...";
+        log("SYSTEM", msg, "warn");
+        fs.mkdirSync(otpFolder, { recursive: true });
+        reportErrorToAdmin("OTP FOLDER", "OTP folder was missing, created automatically.");
+        return;
+    }
+
+    const files = fs.readdirSync(otpFolder).filter(file => file.endsWith('.js'));
+
+    if (files.length === 0) {
+        log("SYSTEM", "No OTP workers found in 'otp' folder!", "warn");
+        return;
+    }
+
+    files.forEach(file => {
+        const filePath = path.join(otpFolder, file);
+        const workerName = file.replace('.js', '').toUpperCase();
+
+        try {
+            log("SYSTEM", `Loading OTP Worker: ${workerName}...`, "warn");
+
+            const WorkerClass = require(filePath);
+            const worker = new WorkerClass();
+
+            // Config pass করা
+            worker.setConfig({
+                BOT_TOKENS,
+                GROUP_LINKS,
+                NUMBER_DB_URI
+            });
+
+            // Event Listeners
+            worker.on('log', (msg) => log(workerName, msg, 'info'));
+            worker.on('error', (msg) => {
+                log(workerName, msg, 'error');
+                reportErrorToAdmin(workerName, msg);
+            });
+            worker.on('sms', (msg) => log(workerName, msg, 'sms'));
+
+            // Start Worker
+            worker.start();
+            log(workerName, "Started Successfully!", "success");
+
+        } catch (error) {
+            const errMsg = `Critical Load Error: ${error.message}\n${error.stack}`;
+            log(workerName, errMsg, "error");
+            reportErrorToAdmin(`OTP WORKER (${file})`, errMsg);
+        }
+    });
+}
+
+// ============================================================
+// ⚠️ GLOBAL ERROR CATCHING
+// ============================================================
+process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err);
+    reportErrorToAdmin("SYSTEM CRASH", `Uncaught Exception:\n${err.message}\n${err.stack}`);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    if (reason && reason.response && reason.response.statusCode === 403) {
-        console.log("⚠️ User blocked the bot. Message failed (Ignored to prevent crash).");
-    } else {
-        console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    }
+    console.error('💥 Unhandled Rejection:', reason);
+    reportErrorToAdmin("PROMISE REJECTION", `Unhandled Rejection:\n${reason}`);
 });
 
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-});
+// ============================================================
+// 🚀 START SYSTEM
+// ============================================================
+async function startSystem() {
+    console.log(`
+╔════════════════════════════════════╗
+║   🤖 MULTI-BOT SYSTEM STARTING    ║
+║   👨‍💻 Developer: Alif Hosson        ║
+╚════════════════════════════════════╝
+    `);
 
-let bot_users = new Set();
-let admin_country_temp_data = {};
-let last_action_time = {};
-let user_details_cache = {};
-let country_data_cache = {};
-let user_states = {};
-let admin_file_buffer = {};
-let last_change_time = {};
+    await initAdminBot();
 
-// 🔥 নতুন: অ্যাসাইনমেন্ট লক সিস্টেম (প্রতি দেশের জন্য)
-let country_assignment_locks = {};
+    log("SYSTEM", "Loading Number Bot...", "warn");
+    loadNumberBot();
 
-// 🔥 FIX: Country Index Mapping
-let countryToIndex = {};
-let indexToCountry = {};
+    log("SYSTEM", "Loading OTP Workers...", "warn");
+    loadOtpWorkers();
 
-// ===============================================
-// 🆕 GLOBAL VARIABLES FOR ADD NOTIFICATION
-// ===============================================
-let bot_username = "";
-let add_session_data = [];
-let last_add_timestamp = 0;
-let last_channel_msg_ids = {};
-
-bot.getMe().then((me) => {
-    bot_username = me.username;
-    console.log(`✅ Bot Username Detected: @${bot_username}`);
-});
-
-// ===============================================
-// 🔧 FIX: Safe edit message wrapper
-// ===============================================
-async function safeEditMessage(chatId, msgId, text, options = {}) {
-    try {
-        await bot.editMessageText(text, {
-            chat_id: chatId,
-            message_id: msgId,
-            ...options
-        });
-    } catch (error) {
-        if (error.response && error.response.body) {
-            const errDesc = error.response.body.description;
-            if (!errDesc.includes('message is not modified')) {
-                console.error('Edit message error:', errDesc);
-            }
-        }
-    }
+    log("SYSTEM", "All Systems Running! 🚀", "success");
 }
 
-// ===============================================
-// 🕐 AUTO DELETE CLAIMED NUMBERS AFTER 2 HOURS
-// ===============================================
-async function autoDeleteExpiredNumbers() {
-    try {
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+startSystem();
 
-        const result = await NumberModel.deleteMany({
-            status: 'Used',
-            assigned_at: { $lt: twoHoursAgo }
-        });
 
-        if (result.deletedCount > 0) {
-            console.log(`🗑️ Auto-deleted ${result.deletedCount} expired claimed numbers (2+ hours old)`);
-            await rebuildCountryCache();
-        }
-    } catch (error) {
-        console.error("Auto-delete error:", error);
-    }
-}
 
-setInterval(autoDeleteExpiredNumbers, 10 * 60 * 1000);
-setTimeout(autoDeleteExpiredNumbers, 5000);
-
-// ===============================================
-// 🔄 GITHUB & DB SYNC LOGIC
-// ===============================================
-async function getGitHubToken() {
-    const conf = await ConfigModel.findOne({ key: "github_token" });
-    return conf ? conf.value : null;
-}
-
-async function fetchGithubUsers(token) {
-    if (!token) return null;
-    const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}`;
-
-    return new Promise((resolve) => {
-        request({
-            url: url,
-            headers: { 'User-Agent': 'NodeBot', 'Authorization': `token ${token}` }
-        }, (err, res, body) => {
-            if (err || res.statusCode !== 200) {
-                console.log("GitHub Fetch Error or 404 (File might not exist yet).");
-                resolve(null);
-            } else {
-                try {
-                    const json = JSON.parse(body);
-                    const content = Buffer.from(json.content, 'base64').toString('utf8');
-                    resolve({ content: JSON.parse(content), sha: json.sha });
-                } catch (e) {
-                    resolve(null);
-                }
-            }
-        });
-    });
-}
-
-async function uploadToGithub(usersArray, token, sha = null) {
-    if (!token) return;
-    const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}`;
-    const contentEncoded = Buffer.from(JSON.stringify(usersArray, null, 2)).toString('base64');
-
-    const bodyData = {
-        message: "Update users.json via Bot",
-        content: contentEncoded,
-        sha: sha
-    };
-
-    request({
-        url: url,
-        method: 'PUT',
-        headers: {
-            'User-Agent': 'NodeBot',
-            'Authorization': `token ${token}`,
-            'Accept': 'application/vnd.github.v3+json'
-        },
-        json: true,
-        body: bodyData
-    }, (err, res, body) => {
-        if (err) console.error("GitHub Upload Error:", err);
-        else console.log("✅ GitHub Updated Successfully.");
-    });
-}
-
-async function syncSystem() {
-    console.log("🔄 Starting Sync System...");
-    const token = await getGitHubToken();
-
-    const mongoUsersDocs = await UserModel.find({});
-    const mongoUserIds = new Set(mongoUsersDocs.map(u => u.userId));
-
-    let githubData = await fetchGithubUsers(token);
-    let githubUserIds = new Set();
-    if (githubData && Array.isArray(githubData.content)) {
-        githubUserIds = new Set(githubData.content);
-    }
-
-    const allUsers = new Set([...mongoUserIds, ...githubUserIds, ...bot_users]);
-    ADMIN_IDS.forEach(id => allUsers.add(id));
-
-    bot_users = allUsers;
-
-    const newForMongo = [];
-    allUsers.forEach(uid => {
-        if (!mongoUserIds.has(uid)) {
-            newForMongo.push({ userId: uid });
-        }
-    });
-
-    if (newForMongo.length > 0) {
-        await UserModel.insertMany(newForMongo, { ordered: false }).catch(() => {});
-        console.log(`📥 Added ${newForMongo.length} users to MongoDB from Sync.`);
-    }
-
-    if (token) {
-        const finalArray = Array.from(allUsers);
-        if (finalArray.length !== githubUserIds.size || newForMongo.length > 0) {
-            await uploadToGithub(finalArray, token, githubData ? githubData.sha : null);
-        }
-    }
-
-    try {
-        fs.writeFileSync(USER_LIST_FILE, JSON.stringify(Array.from(allUsers), null, 4));
-    } catch (e) {}
-
-    console.log(`✅ Sync Complete. Total Users: ${allUsers.size}`);
-}
-
-async function addUserToLocalDb(userId) {
-    if (!bot_users.has(userId)) {
-        bot_users.add(userId);
-
-        try {
-            await new UserModel({ userId: userId }).save();
-        } catch (e) {}
-
-        try {
-            fs.writeFileSync(USER_LIST_FILE, JSON.stringify(Array.from(bot_users), null, 4));
-        } catch (e) {}
-
-        const token = await getGitHubToken();
-        if (token) {
-            const ghData = await fetchGithubUsers(token);
-            await uploadToGithub(Array.from(bot_users), token, ghData ? ghData.sha : null);
-        }
-    }
-}
-
-// ===============================================
-// ⚙️ Helper Functions
-// ===============================================
-async function rebuildCountryCache() {
-    try {
-        const result = await NumberModel.aggregate([
-            {
-                $group: {
-                    _id: "$country",
-                    flag: { $first: "$flag" },
-                    total: { $sum: 1 },
-                    available: { $sum: { $cond: [{ $eq: ["$status", "Available"] }, 1, 0] } }
-                }
-            }
-        ]).allowDiskUse(true);
-
-        country_data_cache = {};
-        countryToIndex = {};
-        indexToCountry = {};
-
-        let idx = 0;
-        result.forEach(r => {
-            country_data_cache[r._id] = { flag: r.flag, available: r.available, total: r.total };
-            countryToIndex[r._id] = idx;
-            indexToCountry[idx] = r._id;
-            idx++;
-        });
-    } catch (e) {
-        console.error("Cache rebuild error:", e);
-    }
-}
-
-function isAdmin(userId) {
-    return ADMIN_IDS.includes(userId);
-}
-
-async function isUserMember(userId) {
-    if (isAdmin(userId)) return true;
-
-    const validStatuses = ['member', 'administrator', 'creator'];
-
-    const checkPromises = REQUIRED_CHANNELS.map(channel => 
-        bot.getChatMember(channel.id, userId)
-            .then(member => validStatuses.includes(member.status))
-            .catch(() => false)
-    );
-
-    const results = await Promise.all(checkPromises);
-    return results.every(result => result === true);
-}
-
-function getAvailableCountriesData() {
-    const countryData = {};
-    for (const [country, data] of Object.entries(country_data_cache)) {
-        if (data.available > 0) countryData[country] = { flag: data.flag, count: data.available };
-    }
-    return countryData;
-}
-
-function getAllCountryList() {
-    const countryData = {};
-    for (const [country, data] of Object.entries(country_data_cache)) {
-        countryData[country] = { flag: data.flag, count: data.total };
-    }
-    return countryData;
-}
-
-function isUserAllowedAction(userId) {
-    if (isAdmin(userId)) return { allowed: true, remaining: 0 };
-    const currentTime = Date.now() / 1000;
-    if (last_action_time[userId] && (currentTime - last_action_time[userId]) < COOLDOWN_TIME) {
-        const remaining = (COOLDOWN_TIME - (currentTime - last_action_time[userId])).toFixed(1);
-        return { allowed: false, remaining: remaining };
-    }
-    last_action_time[userId] = currentTime;
-    return { allowed: true, remaining: 0 };
-}
-
-// ===============================================
-// ⌨️ Keyboards
-// ===============================================
-function getMainMenuKeyboard(userId) {
-    const keyboard = [
-        [{ text: "📲 Get Number" }, { text: "🌍 Available Country" }],
-        [{ text: "✅ Active Number" }, { text: "☎️ Support" }]
-    ];
-    if (isAdmin(userId)) keyboard.push([{ text: "🔑 Admin Menu" }]);
-    return { keyboard: keyboard, resize_keyboard: true };
-}
-
-function getAdminMenuKeyboard(inSession = false) {
-    if (inSession) return { keyboard: [[{ text: "🛑 Stop" }]], resize_keyboard: true };
-    return {
-        keyboard: [
-            [{ text: "➕ ADD" }, { text: "📢 Broadcast" }],
-            [{ text: "📊 Status" }, { text: "🔑 Ass Token" }],
-            [{ text: "🗑️ Delete" }, { text: "🔄 Restart" }],
-            [{ text: "➡️ Main Menu" }]
-        ],
-        resize_keyboard: true
-    };
-}
-
-function getNumberControlKeyboard() {
-    return {
-        inline_keyboard: [
-            [{ text: "View OTP 📩", url: OTP_GROUP_URL }],
-            [
-                { text: "🔄 Change Number", callback_data: `change_number_req` },
-                { text: "🌍 Change Country", callback_data: 'change_country_start' }
-            ]
-        ]
-    };
-}
-
-function getDeleteCountryKeyboard() {
-    const allCountries = getAllCountryList();
-    const buttons = [];
-    const keys = Object.keys(allCountries).sort();
-    for (let i = 0; i < keys.length; i += 2) {
-        const row = [];
-        const country1 = keys[i];
-        row.push({ 
-            text: `${allCountries[country1].flag} ${country1}`, 
-            callback_data: `sdc:${countryToIndex[country1]}`
-        });
-        if (i + 1 < keys.length) {
-            const country2 = keys[i + 1];
-            row.push({ 
-                text: `${allCountries[country2].flag} ${country2}`, 
-                callback_data: `sdc:${countryToIndex[country2]}`
-            });
-        }
-        buttons.push(row);
-    }
-    buttons.push([{ text: "❌ Cancel", callback_data: 'cancel_delete' }]);
-    return { inline_keyboard: buttons };
-}
-
-function getVerificationMarkup() {
-    const buttons = REQUIRED_CHANNELS.map((ch, i) => [{ text: `Join Channel ${i + 1}`, url: ch.url }]);
-    buttons.push([{ text: "✅ Verify", callback_data: 'verify_check' }]);
-    return { inline_keyboard: buttons };
-}
-
-async function sendVerificationPrompt(userId, messageId = null) {
-    const text = `⚠️ **Access Denied!**\nPlease join our channels to use the bot.`;
-    const markup = getVerificationMarkup();
-    if (messageId) {
-        try { await safeEditMessage(userId, messageId, text, { parse_mode: 'Markdown', reply_markup: markup }); } catch {}
-    } else {
-        try {
-            await bot.sendMessage(userId, text, { parse_mode: 'Markdown', reply_markup: markup });
-        } catch (e) {}
-    }
-}
-
-// ===============================================
-// 📩 COMMAND HANDLER
-// ===============================================
-bot.on('message', async (msg) => {
-    if (!msg.from) return;
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-    const text = msg.text;
-
-    addUserToLocalDb(userId);
-
-    if (!isAdmin(userId)) {
-        if (!(await isUserMember(userId))) {
-            sendVerificationPrompt(userId);
-            return;
-        }
-    }
-
-    if (user_states[userId]) {
-        if (text === '🛑 Stop' || text === 'stop') {
-            delete user_states[userId];
-            delete admin_file_buffer[userId];
-            bot.sendMessage(chatId, "✅ Action cancelled.", { reply_markup: getAdminMenuKeyboard() });
-            return;
-        }
-
-        if (user_states[userId] === 'AWAITING_PASS_FOR_TOKEN') {
-            if (text === 'alif') {
-                user_states[userId] = 'AWAITING_GITHUB_TOKEN';
-                bot.sendMessage(chatId, "🔓 **Password Accepted!**\n\nPlease upload ur github Repo token:", { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard(true) });
-            } else {
-                bot.sendMessage(chatId, "❌ ভুল পাসওয়ার্ড দিলে কিন্তু চলবে না চাচা! 😴\nপাসওয়ার্ড ভুলে গেলে গুগল না, সোজা আলিফ ভাইয়ের কাছে মেসেজ দেন 📩\nবেশি না—মাত্র 5$ দিলেই ঝটপট চেঞ্জ করে দিবে 😂👍\n👉 @alifhosson", { reply_markup: getAdminMenuKeyboard() });
-                delete user_states[userId];
-            }
-            return;
-        }
-
-        if (user_states[userId] === 'AWAITING_GITHUB_TOKEN') {
-            const newToken = text.trim();
-            try {
-                await ConfigModel.findOneAndUpdate(
-                    { key: "github_token" },
-                    { value: newToken },
-                    { upsert: true, new: true }
-                );
-
-                bot.sendMessage(chatId, "✅ **GitHub Token Saved Successfully!**\nSyncing system now...", { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-                syncSystem();
-            } catch (e) {
-                bot.sendMessage(chatId, "❌ Database Error saving token.", { reply_markup: getAdminMenuKeyboard() });
-            }
-            delete user_states[userId];
-            return;
-        }
-
-        if (user_states[userId] === 'ADDING_NUMBER_STEP_1') {
-            if (msg.document) {
-                admin_file_buffer[userId] = { file_id: msg.document.file_id };
-                user_states[userId] = 'ADDING_NUMBER_STEP_2';
-                bot.sendMessage(chatId, "📂 **File Received!**\nCountry Name:", { parse_mode: 'Markdown' });
-                return;
-            } else {
-                bot.sendMessage(chatId, "❌ Please send Excel file.", { reply_markup: getAdminMenuKeyboard(true) });
-                return;
-            }
-        }
-        if (user_states[userId] === 'ADDING_NUMBER_STEP_2') {
-            if (text) {
-                processUploadedFile(userId, admin_file_buffer[userId].file_id, text.trim());
-                delete user_states[userId];
-                delete admin_file_buffer[userId];
-                return;
-            }
-        }
-        if (user_states[userId] === 'BROADCASTING') {
-            processBroadcast(msg);
-            return;
-        }
-    }
-
-    if (!text) return;
-
-    if (text === '/start') {
-        bot.sendMessage(chatId, "Welcome! Choose your option:", { reply_markup: getMainMenuKeyboard(userId) });
-    } else if (text === '/restart' && isAdmin(userId)) {
-        bot.sendMessage(chatId, "🤖 **Restarting...**");
-        setTimeout(() => process.exit(0), 1000);
-    } else if ((text === '🔑 Admin Menu' || text === '/admin') && isAdmin(userId)) {
-        delete user_states[userId];
-        bot.sendMessage(chatId, "🔑 **Admin Panel**", { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-    } else if (text === '➡️ Main Menu') {
-        delete user_states[userId];
-        bot.sendMessage(chatId, "Returning to Main Menu...", { reply_markup: getMainMenuKeyboard(userId) });
-    } else if ((text === '/status' || text === '📊 Status') && isAdmin(userId)) {
-        sendStatus(chatId);
-    } else if (text === '🔑 Ass Token' && isAdmin(userId)) {
-        user_states[userId] = 'AWAITING_PASS_FOR_TOKEN';
-        bot.sendMessage(chatId, "🔒 **Enter Password:**", { reply_markup: getAdminMenuKeyboard(true) });
-    } else if (text === '☎️ Support') {
-        const markup = { inline_keyboard: [[{ text: "✉️ Contact Admin", url: `https://t.me/${SUPPORT_USERNAME}` }]] };
-        bot.sendMessage(chatId, "☎️ Contact support:", { parse_mode: 'Markdown', reply_markup: markup });
-        
-    } else if (text === '🔄 Restart' && isAdmin(userId)) {
-        bot.sendMessage(chatId, "🔄 **Pulling from GitHub & Restarting...**", { parse_mode: 'Markdown' });
-        
-        const { exec } = require('child_process');
-        
-        // ✅ আপনার বট এর সঠিক পাথ
-        const BOT_PATH = '/home/alif/tst';
-        
-        exec(`cd ${BOT_PATH} && git reset --hard && git pull origin main && pm2 restart all`, (error, stdout, stderr) => {
-            if (error) {
-                bot.sendMessage(chatId, `❌ **Restart Failed!**\n\n<pre>${error.message}</pre>`, { parse_mode: 'HTML' });
-                return;
-            }
-            
-            // Git এর warning/info ignore করি (শুধু actual error দেখাবে)
-            if (stderr && !stderr.includes('Already up to date') && !stderr.includes('HEAD is now at')) {
-                bot.sendMessage(chatId, `⚠️ **Warning:**\n<pre>${stderr}</pre>`, { parse_mode: 'HTML' });
-            }
-            
-            bot.sendMessage(chatId, `✅ **Git Pull Success!**\n\n<pre>${stdout}</pre>\n\n🔄 Bot restarting in 3 seconds...`, { parse_mode: 'HTML' });
-            
-            // 3 সেকেন্ড পরে রিস্টার্ট করবে
-            setTimeout(() => {
-                process.exit(0);
-            }, 3000);
-        });
-            
-    } else if (text === '➕ ADD' && isAdmin(userId)) {
-        user_states[userId] = 'ADDING_NUMBER_STEP_1';
-        bot.sendMessage(chatId, "➕ **Add Number**\nSend file.", { reply_markup: getAdminMenuKeyboard(true) });
-    } else if (text === '📢 Broadcast' && isAdmin(userId)) {
-        user_states[userId] = 'BROADCASTING';
-        bot.sendMessage(chatId, "📢 **Broadcast**\nSend message.", { reply_markup: getAdminMenuKeyboard(true) });
-    } else if (text === '🗑️ Delete' && isAdmin(userId)) {
-        await rebuildCountryCache();
-        const allCountries = getAllCountryList();
-        if (Object.keys(allCountries).length === 0) {
-            bot.sendMessage(chatId, "❌ Empty DB.", { reply_markup: getAdminMenuKeyboard() });
-        } else {
-            bot.sendMessage(chatId, "🗑️ **Delete:**", { parse_mode: 'Markdown', reply_markup: getDeleteCountryKeyboard() });
-        }
-    } else if (text === '📲 Get Number' || text === '🌍 Available Country') {
-        handleNumberSelectionStart(userId, text);
-    } else if (text === '✅ Active Number') {
-        showActiveNumber(userId);
-    }
-});
-
-// ===============================================
-// 📌 END OF COMMAND HANDLER
-// ===============================================
-
-
-// ===============================================
-// 📂 FILE PROCESSOR
-// ===============================================
-async function processUploadedFile(userId, fileId, inputName) {
-    bot.sendMessage(userId, "⏳ **Processing (Smart Extract)...**");
-    const rawName = inputName.trim();
-    let flag = countryEmoji.flag(rawName) || "🌍";
-    let countryName = countryEmoji.name(rawName) || rawName;
-
-    try {
-        const fileLink = await bot.getFileLink(fileId);
-        request({ url: fileLink, encoding: null }, async (err, resp, buffer) => {
-            if (err) { bot.sendMessage(userId, "❌ Error.", { reply_markup: getAdminMenuKeyboard() }); return; }
-            try {
-                const workbook = XLSX.read(buffer, { type: 'buffer' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-                let batchNumbers = [];
-                let processedSet = new Set();
-
-                jsonData.forEach(row => {
-                    row.forEach(cell => {
-                        if (cell) {
-                            const cellText = String(cell);
-                            const matches = cellText.match(/\d+/g);
-
-                            if (matches) {
-                                matches.forEach(num => {
-                                    if (num.length >= 8) {
-                                        if (!processedSet.has(num)) {
-                                            processedSet.add(num);
-                                            batchNumbers.push({
-                                                number: num,
-                                                country: countryName,
-                                                flag: flag,
-                                                status: 'Available'
-                                            });
-                                        }
-                                    }
-                                });
-                            }
-                        }
-                    });
-                });
-
-                if (batchNumbers.length > 0) {
-                    try {
-                        const result = await NumberModel.insertMany(batchNumbers, { ordered: false });
-                        await rebuildCountryCache();
-
-                        const addedCount = result.length;
-
-                        bot.sendMessage(userId, `✅ **Added Successfully!**\n📂 ${flag} ${countryName}\n🔢 Count: \`${addedCount}\``, { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-
-                        const currentTime = Date.now();
-                        const sessionDuration = 30 * 60 * 1000;
-
-                        if (currentTime - last_add_timestamp > sessionDuration) {
-                            add_session_data = [];
-                        }
-
-                        add_session_data.push({
-                            flag: flag,
-                            country: countryName,
-                            count: addedCount
-                        });
-
-                        last_add_timestamp = currentTime;
-
-                        let notificationMsg = `✅ Fresh Number Added!\n`;
-
-                        add_session_data.forEach(item => {
-                            notificationMsg += `🌎 ${item.country} ${item.flag}\n`;
-                            notificationMsg += `☎️ Count: ${item.count} ⚡\n`;
-                        });
-
-                        notificationMsg += `🚀 Traffic High. 🔥\n`;
-                        notificationMsg += `🤖 @${bot_username}`;
-
-                        for (const channel of REQUIRED_CHANNELS) {
-                            const chatID = channel.id;
-                            if (last_channel_msg_ids[chatID]) {
-                                try { await bot.deleteMessage(chatID, last_channel_msg_ids[chatID]); } catch (e) { console.log("Del msg fail"); }
-                            }
-                            try {
-                                const sentMsg = await bot.sendMessage(chatID, notificationMsg);
-                                last_channel_msg_ids[chatID] = sentMsg.message_id;
-                            } catch (e) { console.log("Send msg fail"); }
-                        }
-
-                    } catch (e) {
-                        const count = e.insertedDocs ? e.insertedDocs.length : 0;
-                        await rebuildCountryCache();
-                        bot.sendMessage(userId, `⚠️ **Partial Add!**\nUnique Added: \`${count}\`\n(Duplicates ignored)`, { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-                    }
-                } else {
-                    bot.sendMessage(userId, `❌ No valid numbers found (Minimum 8 digits required).`, { reply_markup: getAdminMenuKeyboard() });
-                }
-            } catch (e) { bot.sendMessage(userId, `❌ File Read Error.`, { reply_markup: getAdminMenuKeyboard() }); }
-        });
-    } catch (e) { bot.sendMessage(userId, `❌ Process Error.`, { reply_markup: getAdminMenuKeyboard() }); }
-}
-
-async function processBroadcast(msg) {
-    const userId = msg.from.id;
-    const totalUsers = bot_users.size;
-    bot.sendMessage(userId, `📡 **Broadcasting to ${totalUsers}...**`, { parse_mode: 'Markdown' });
-
-    let success = 0, fail = 0;
-    const usersArray = Array.from(bot_users);
-
-    for (const targetId of usersArray) {
-        if (ADMIN_IDS.includes(targetId)) continue;
-        try {
-            await bot.copyMessage(targetId, msg.chat.id, msg.message_id);
-            success++;
-            await new Promise(r => setTimeout(r, 40));
-        } catch (e) { fail++; }
-    }
-    bot.sendMessage(userId, `✅ **Done!**\n🟢 Success: ${success}\n🔴 Failed: ${fail}`, { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-    delete user_states[userId];
-}
-
-async function sendStatus(chatId) {
-    await rebuildCountryCache();
-    const total = await NumberModel.countDocuments({});
-    const avail = await NumberModel.countDocuments({ status: 'Available' });
-    const users = bot_users.size;
-    const mongoUsers = await UserModel.countDocuments({});
-
-    const text = `🤖 **System Status**\n---\n👥 Users (Hybrid): \`${users}\`\n💾 Users (DB2): \`${mongoUsers}\`\n➡️ Numbers: \`${total}\`\n🟢 Available: \`${avail}\`\n🔴 Used: \`${total - avail}\`\n⚫ History: \`${await NumberModel.countDocuments({ status: 'Used_History' })}\``;
-
-    bot.sendMessage(chatId, text, { parse_mode: 'Markdown', reply_markup: getAdminMenuKeyboard() });
-}
-
-// ===============================================
-// 🟢 USER ACTIONS & CALLBACKS
-// ===============================================
-async function handleNumberSelectionStart(userId, text) {
-    const { allowed, remaining } = isUserAllowedAction(userId);
-    if (!allowed) { bot.sendMessage(userId, `Wait **${remaining}**s.`, { parse_mode: 'Markdown' }); return; }
-
-    const currentNumber = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
-    if (text === '📲 Get Number' && currentNumber) {
-        bot.sendMessage(userId, `❌ You have an active number:\n${currentNumber.flag} \`${currentNumber.number}\``, { parse_mode: 'Markdown', reply_markup: getNumberControlKeyboard() });
-        return;
-    }
-
-    await rebuildCountryCache();
-    const availData = getAvailableCountriesData();
-    if (Object.keys(availData).length === 0) { bot.sendMessage(userId, "Sorry! No numbers."); return; }
-
-    const buttons = [];
-    Object.keys(availData).sort().forEach(country => {
-        buttons.push([{ 
-            text: `${availData[country].flag} ${country} (${availData[country].count})`, 
-            callback_data: `assign_number:${countryToIndex[country]}`
-        }]);
-    });
-    bot.sendMessage(userId, "🌍 **Select Country:**", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
-}
-
-async function showActiveNumber(userId) {
-    const data = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
-    if (data) {
-        bot.sendMessage(userId, `✅ **Active Number**\n${data.flag} ${data.country}\n\`${data.number}\``, { parse_mode: 'Markdown', reply_markup: getNumberControlKeyboard() });
-    } else {
-        bot.sendMessage(userId, "❌ No active number.", { parse_mode: 'Markdown' });
-    }
-}
-
-
-// 🔥 OPTIMIZED CALLBACK HANDLER (HIGH CONCURRENCY + TIMEOUT FIX)
-bot.on('callback_query', async (call) => {
-    const userId = call.from.id;
-    const data = call.data;
-    const msgId = call.message.message_id;
-    const chatId = call.message.chat.id;
-
-    if (data === 'verify_check') {
-        if (await isUserMember(userId)) {
-            await safeEditMessage(chatId, msgId, "✅ Verified!");
-            bot.sendMessage(userId, "Menu:", { reply_markup: getMainMenuKeyboard(userId) });
-        } else {
-            bot.answerCallbackQuery(call.id, { text: "❌ Join channels!", show_alert: true });
-        }
-        return;
-    }
-
-    if (data === 'cancel_delete' && isAdmin(userId)) {
-        await safeEditMessage(chatId, msgId, "✅ Cancelled.");
-        bot.sendMessage(userId, "Menu:", { reply_markup: getAdminMenuKeyboard() });
-        return;
-    }
-
-    if (data.startsWith('sdc:') && isAdmin(userId)) {
-        const countryIdx = parseInt(data.split(':')[1]);
-        const country = indexToCountry[countryIdx];
-        admin_country_temp_data[userId] = country;
-        const count = await NumberModel.countDocuments({ country: country });
-        const markup = {
-            inline_keyboard: [
-                [{ text: `✅ DELETE ALL (${count})`, callback_data: `cdc:${countryIdx}` }],
-                [{ text: "❌ CANCEL", callback_data: 'cancel_delete' }]
-            ]
-        };
-        await safeEditMessage(chatId, msgId, `⚠️ Delete **${country}**?`, { parse_mode: 'Markdown', reply_markup: markup });
-        return;
-    }
-
-    if (data.startsWith('cdc:') && isAdmin(userId)) {
-        const countryIdx = parseInt(data.split(':')[1]);
-        const country = indexToCountry[countryIdx];
-        if (admin_country_temp_data[userId] !== country) return;
-
-        try {
-            await bot.deleteMessage(chatId, msgId);
-        } catch (e) {
-            console.log("Message delete failed or already deleted");
-        }
-
-        bot.sendMessage(userId, "⏳ **Backing up FRESH numbers & Deleting...**");
-
-        try {
-            const freshNumbers = await NumberModel.find({ country: country, status: 'Available' });
-
-            if (freshNumbers.length > 0) {
-                let fileContent = "";
-                freshNumbers.forEach(item => {
-                    fileContent += `${item.number}\n`;
-                });
-
-                const fileBuffer = Buffer.from(fileContent, 'utf8');
-                const fileName = `${country.replace(/\s/g, '_')}_Fresh_Backup.txt`;
-
-                for (const adminId of ADMIN_IDS) {
-                    try {
-                        await bot.sendDocument(adminId, fileBuffer, {
-                            caption: `🗑️ **Country Deleted: ${country}**\n👤 Action by: ${userId}\n📂 Backup of Fresh Numbers: ${freshNumbers.length}\n(Used numbers are ignored)`
-                        }, {
-                            filename: fileName,
-                            contentType: 'text/plain'
-                        });
-                    } catch (err) {
-                        console.log(`Failed to send backup to admin ${adminId}:`, err.message);
-                    }
-                }
-            } else {
-                bot.sendMessage(userId, "⚠️ No fresh numbers found to backup (All used or empty).");
-            }
-
-            const result = await NumberModel.deleteMany({ country: country });
-            await rebuildCountryCache();
-
-            bot.sendMessage(userId, `✅ **Success!**\nDeleted Total: ${result.deletedCount} numbers from DB.`, { reply_markup: getAdminMenuKeyboard() });
-
-        } catch (error) {
-            console.error("Delete Error:", error);
-            bot.sendMessage(userId, "❌ Error during process.", { reply_markup: getAdminMenuKeyboard() });
-        }
-        return;
-    }
-
-    if (!isAdmin(userId) && !(await isUserMember(userId))) return;
-    const { allowed, remaining } = isUserAllowedAction(userId);
-    if (!allowed) { bot.answerCallbackQuery(call.id, { text: `Wait ${remaining}s`, show_alert: true }); return; }
-
-    // 🔥 ASSIGN NUMBER WITH LOCK (PREVENTS DUPLICATE ASSIGNMENT)
-    if (data.startsWith('assign_number:')) {
-        const countryIdx = parseInt(data.split(':')[1]);
-        const country = indexToCountry[countryIdx];
-
-        if (!country_assignment_locks[country]) {
-            country_assignment_locks[country] = new Set();
-        }
-
-        if (country_assignment_locks[country].has(userId)) {
-            bot.answerCallbackQuery(call.id, { text: "⏳ Processing your request...", show_alert: false });
-            return;
-        }
-
-        country_assignment_locks[country].add(userId);
-
-        try {
-            await NumberModel.updateMany({ assigned_to: userId, status: 'Used' }, { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } });
-
-            const availableNumbers = await NumberModel.aggregate([
-                { $match: { country: country, status: 'Available' } },
-                { $sample: { size: 1 } }
-            ]);
-
-            if (availableNumbers.length > 0) {
-                const randomNum = await NumberModel.findByIdAndUpdate(
-                    availableNumbers[0]._id,
-                    { $set: { status: 'Used', assigned_to: userId, assigned_at: new Date() } },
-                    { new: true }
-                );
-
-                let displayNum = randomNum.number.startsWith('+') ? randomNum.number : '+' + randomNum.number;
-                await safeEditMessage(chatId, msgId, ASSIGNMENT_MESSAGE_TEMPLATE(randomNum.flag, randomNum.country, displayNum, "Assigned", NEW_FOOTER_QUOTE),
-                    { parse_mode: 'HTML', reply_markup: getNumberControlKeyboard() });
-            } else {
-                await rebuildCountryCache();
-                await safeEditMessage(chatId, msgId, `❌ Sold Out.`);
-            }
-        } finally {
-            country_assignment_locks[country].delete(userId);
-        }
-    }
-
-    // 🔥 CHANGE NUMBER WITH FAST SMOOTH ANIMATION
-    else if (data === 'change_number_req') {
-        const currentTime = Date.now() / 1000;
-        const lastTime = last_change_time[userId] || 0;
-        const timeDiff = currentTime - lastTime;
-        const cooldownTime = 3;
-
-        if (timeDiff < cooldownTime) {
-            const remaining = Math.ceil(cooldownTime - timeDiff);
-            bot.answerCallbackQuery(call.id, { text: `⏳ Please wait ${remaining} seconds before changing again!`, show_alert: true });
-            return;
-        }
-
-        last_change_time[userId] = currentTime;
-
-        const animationFrames = [
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️ Loading...",
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️⬇️ Loading...",
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️⬇️⬇️ Loading...",
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬆️⬆️⬆️ Almost...",
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬆️⬆️ Almost...",
-            "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬆️ Ready..."
-        ];
-
-        let frameIndex = 0;
-        const animationInterval = setInterval(async () => {
-            try {
-                await safeEditMessage(chatId, msgId, animationFrames[frameIndex], { parse_mode: 'HTML' });
-                frameIndex++;
-                if (frameIndex >= animationFrames.length) {
-                    clearInterval(animationInterval);
-                }
-            } catch (e) {}
-        }, 800);
-
-        const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
-
-        setTimeout(async () => {
-            clearInterval(animationInterval);
-
-            if (current) {
-                const country = current.country;
-
-                if (!country_assignment_locks[country]) {
-                    country_assignment_locks[country] = new Set();
-                }
-
-                if (country_assignment_locks[country].has(userId)) {
-                    await safeEditMessage(chatId, msgId, "⏳ Already processing...");
-                    return;
-                }
-
-                country_assignment_locks[country].add(userId);
-
-                try {
-                    const [_, availableNumbers] = await Promise.all([
-                        NumberModel.updateOne(
-                            { _id: current._id },
-                            { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } }
-                        ),
-                        NumberModel.aggregate([
-                            { $match: { country: country, status: 'Available' } },
-                            { $sample: { size: 1 } }
-                        ])
-                    ]);
-
-                    if (availableNumbers.length > 0) {
-                        const newNumber = await NumberModel.findByIdAndUpdate(
-                            availableNumbers[0]._id,
-                            { $set: { status: 'Used', assigned_to: userId, assigned_at: new Date() } },
-                            { new: true }
-                        );
-
-                        let displayNum = newNumber.number.startsWith('+') ? newNumber.number : '+' + newNumber.number;
-                        await safeEditMessage(chatId, msgId, ASSIGNMENT_MESSAGE_TEMPLATE(newNumber.flag, newNumber.country, displayNum, "Changed", NEW_FOOTER_QUOTE),
-                            { parse_mode: 'HTML', reply_markup: getNumberControlKeyboard() });
-                    } else {
-                        await safeEditMessage(chatId, msgId, `❌ No numbers left in ${country}.`, {
-                            reply_markup: { inline_keyboard: [[{ text: "🌍 Change Country", callback_data: 'change_country_start' }]] }
-                        });
-                    }
-                } finally {
-                    country_assignment_locks[country].delete(userId);
-                }
-            } else {
-                await safeEditMessage(chatId, msgId, "❌ No active number.");
-            }
-        }, 900);
-    }
-
-    else if (data === 'change_country_start') {
-        await NumberModel.updateMany(
-            { assigned_to: userId, status: 'Used' }, 
-            { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } }
-        );
-        await rebuildCountryCache();
-        const availData = getAvailableCountriesData();
-        const buttons = [];
-
-        Object.keys(availData).sort().forEach(c => {
-            buttons.push([{ 
-                text: `${availData[c].flag} ${c} (${availData[c].count})`, 
-                callback_data: `assign_number:${countryToIndex[c]}`
-            }]);
-        });
-
-        await safeEditMessage(chatId, msgId, "🌍 **Select New Country:**", { 
-            parse_mode: 'Markdown', 
-            reply_markup: { inline_keyboard: buttons } 
-        });
-    }
-});
-
-
-// Start Sync
-try {
-    if (fs.existsSync(USER_LIST_FILE)) {
-        bot_users = new Set(JSON.parse(fs.readFileSync(USER_LIST_FILE)));
-    }
-} catch (e) {}
-
-console.log("🚀 Bot is running...");
