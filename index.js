@@ -46,7 +46,7 @@ ${flag} <b>${country_name}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>
 ┗━━ <code>${number}</code> ━━┛
 
 ┏━━━━━━━━━━━━━┓ 
-  ⏳ 𝐖𝐚𝐢𝐭𝐢𝐧𝐠 𝐅𝐨𝐫 𝐎𝐓𝐏.... 
+    ⏳ 𝐖𝐚𝐢𝐭𝐢𝐧𝐠 𝐅𝐨𝐫 𝐎𝐓𝐏...  
 ┗━━━━━━━━━━━━━┛
 ━━━━━━━━━━━━━━━━━
 ${footer}
@@ -546,16 +546,22 @@ bot.on('message', async (msg) => {
                     }
                 }
                 
-                // ✅ Final Success Message
+                // ✅ Final Success Message + Show Buttons
                 try {
                     await bot.editMessageText(
-                        "✅ **Restart Successful!**\n\n🤖 Bot is now restarting...\n⏰ It will be back online in a moment.",
+                        "✅ **Restart Complete!**\n\n🤖 Bot successfully restarted!\n🎉 All systems operational.",
                         {
                             chat_id: chatId,
                             message_id: countdownMsgId,
                             parse_mode: 'Markdown'
                         }
                     );
+                    
+                    // ✅ Admin Menu Button ফিরিয়ে দিচ্ছি
+                    await bot.sendMessage(chatId, "🔑 **Welcome Back!**\n\nBot is ready. Choose an option:", {
+                        parse_mode: 'Markdown',
+                        reply_markup: getAdminMenuKeyboard()
+                    });
                 } catch (e) {}
                 
                 // 🔄 Git Pull & Restart করছি
@@ -579,9 +585,7 @@ bot.on('message', async (msg) => {
                 
             } else {
                 // ❌ Wrong Password
-                bot.sendMessage(chatId, "🚫 বাল পাকনা, এটা আপনার জন্য না 😅**\n\n" +
-"এই অপশনটা শুধু বট ডেভেলপারদের জন্য। ফাইল আপডেট বট আপডেট এর জন্য\n" +
-"ভুল করে ঢুকে পড়লে এখনই ব্যাক যান\n👉 @alifhosson", { 
+                bot.sendMessage(chatId, "❌ ভুল পাসওয়ার্ড দিলে কিন্তু চলবে না চাচা! 😴\nপাসওয়ার্ড ভুলে গেলে গুগল না, সোজা আলিফ ভাইয়ের কাছে মেসেজ দেন 📩\nবেশি না—মাত্র 5$ দিলেই ঝটপট চেঞ্জ করে দিবে 😂👍\n👉 @alifhosson", { 
                     reply_markup: getAdminMenuKeyboard() 
                 });
                 delete user_states[userId];
