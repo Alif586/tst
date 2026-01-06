@@ -1076,7 +1076,7 @@ bot.on('callback_query', async (call) => {
         const bigFormat = currentMsg;
 
         // ⚡ Animation: ছোট→বড়→ছোট→বড়
-        const frames = [smallFormat, bigFormat, smallFormat, bigFormat];
+        
         
         let frameIndex = 0;
         const animationInterval = setInterval(async () => {
