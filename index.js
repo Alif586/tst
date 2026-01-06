@@ -1031,7 +1031,7 @@ bot.on('callback_query', async (call) => {
         }
     }
 
-    else if (data === 'change_number_req') {
+   else if (data === 'change_number_req') {
     const currentTime = Date.now() / 1000;
     const lastTime = last_change_time[userId] || 0;
     const timeDiff = currentTime - lastTime;
