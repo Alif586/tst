@@ -526,62 +526,47 @@ bot.on('message', async (msg) => {
                     }
                 );
                 
-                const countdownMsgId = countdownMsg.message_id;
-                
-                // 📊 Countdown শুরু করছি (6 থেকে 1)
+                // 📊 Countdown শুরু করছি (5 থেকে 1)
                 for (let i = 5; i >= 1; i--) {
                     await new Promise(r => setTimeout(r, 1000)); // 1 second wait
-                    
                     try {
                         await bot.editMessageText(
                             `🔄 **Restarting Bot...**\n\n⏳ Please wait: **${i}** seconds\n\n⚠️ All buttons disabled!`,
                             {
                                 chat_id: chatId,
-                                message_id: countdownMsgId,
+                                message_id: countdownMsg.message_id,
                                 parse_mode: 'Markdown'
                             }
                         );
-                    } catch (e) {
-                        // Edit error ignore করছি
-                    }
+                    } catch (e) {}
                 }
                 
-                // ✅ Final Success Message + Show Buttons
+                // ✅ ১. আগের Waiting Message ডিলিট করছি
                 try {
-                    await bot.editMessageText(
-                        "✅ **Restart Complete!**\n\n🤖 Bot successfully restarted!\n🎉 All systems operational.",
-                        {
-                            chat_id: chatId,
-                            message_id: countdownMsgId,
-                            parse_mode: 'Markdown'
-                        }
-                    );
-                    
-                    // ✅ Admin Menu Button ফিরিয়ে দিচ্ছি
-                    await bot.sendMessage(chatId, "🔑 **Welcome Back!**\n\nBot is ready. Choose an option:", {
-                        parse_mode: 'Markdown',
-                        reply_markup: getAdminMenuKeyboard()
-                    });
+                    await bot.deleteMessage(chatId, countdownMsg.message_id);
                 } catch (e) {}
-                
-                // 🔄 Git Pull & Restart করছি
-                const { exec } = require('child_process');
-                const BOT_PATH = '/home/alif/tst'; // 👈 আপনার path
-                
-                exec(`cd ${BOT_PATH} && git reset --hard && git pull origin main && pm2 restart tst`, (error, stdout, stderr) => {
-                    if (error) {
-                        bot.sendMessage(chatId, `❌ **Restart Failed!**\n\n<pre>${error.message}</pre>`, { 
-                            parse_mode: 'HTML',
-                            reply_markup: getAdminMenuKeyboard() 
-                        });
-                        return;
-                    }
-                    
-                    // 2 second পরে process exit
-                    setTimeout(() => {
-                        process.exit(0);
-                    }, 2000);
+
+                // ✅ ২. সাকসেস মেসেজ এবং বাটন শো করছি (Restart এর আগেই)
+                await bot.sendMessage(chatId, "✅ **Restart Complete!**\n\n🤖 Bot successfully updated & restarted!\n🎉 All systems operational.\n\n⤵️ **Select an option:**", {
+                    parse_mode: 'Markdown',
+                    reply_markup: getAdminMenuKeyboard() // বাটন ফেরত আসবে
                 });
+                
+                // 🔄 ৩. সিস্টেম রিস্টার্ট করছি (একটু সময় নিয়ে যাতে মেসেজটা যায়)
+                setTimeout(() => {
+                    const { exec } = require('child_process');
+                    const BOT_PATH = '/home/alif/tst'; // 👈 আপনার path ঠিক থাকলে হাত দেবেন না
+                    
+                    exec(`cd ${BOT_PATH} && git reset --hard && git pull origin main && pm2 restart tst`, (error, stdout, stderr) => {
+                        if (error) {
+                            // যদি কোনো কারণে রিস্টার্ট না হয়, তাহলে এরর দেখাবে
+                            bot.sendMessage(chatId, `❌ **Restart Failed!**\n\n<pre>${error.message}</pre>`, { 
+                                parse_mode: 'HTML',
+                                reply_markup: getAdminMenuKeyboard() 
+                            });
+                        }
+                    });
+                }, 1000); // ১ সেকেন্ড পর রিস্টার্ট হবে
                 
             } else {
                 // ❌ Wrong Password
