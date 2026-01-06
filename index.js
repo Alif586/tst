@@ -1084,7 +1084,7 @@ bot.on('callback_query', async (call) => {
             } else {
                 clearInterval(animationInterval);
             }
-        }, 200); // 200ms per frame = 0.8 second total
+        }, 90); // 200ms per frame = 0.8 second total
 
         try {
             // ⚡ Parallel database operations
