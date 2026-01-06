@@ -1070,16 +1070,7 @@ bot.on('callback_query', async (call) => {
         
         const scaleFrames = [
             // Frame 1: ছোট (50% size)
-            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`,
-            
-            // Frame 2: বড় (100% size - original format)
-            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:\n┗━━ <code>${originalNumber}</code> ━━┛\n\n━━━━━━━━━━━━━`,
-            
-            // Frame 3: ছোট again
-            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`,
-            
-            // Frame 4: বড় (final before new number)
-            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:\n┗━━ <code>${originalNumber}</code> ━━┛\n\n━━━━━━━━━━━━━`
+            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`
         ];
 
         // ⚡ Start animation in background
