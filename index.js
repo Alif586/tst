@@ -1029,8 +1029,7 @@ bot.on('callback_query', async (call) => {
         last_change_time[userId] = currentTime;
 
         const animationFrames = [
-    "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️ Processing...",
-    "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬆️ Ready..."
+    "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️ Processing..."
 ];
 
         let frameIndex = 0;
@@ -1096,7 +1095,7 @@ bot.on('callback_query', async (call) => {
             } else {
                 await safeEditMessage(chatId, msgId, "❌ No active number.");
             }
-        }, 500);  // 900ms থেকে 500ms করলাম
+        }, 200);  // 900ms থেকে 500ms করলাম
     }
 
     else if (data === 'change_country_start') {
