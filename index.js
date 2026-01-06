@@ -1069,14 +1069,13 @@ bot.on('callback_query', async (call) => {
         const currentMsg = call.message.text || call.message.caption || "";
         
         // ⚡ ছোট version (শুধু number দেখাবে)
-        const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
-        const smallFormat = `${current.flag} <b>${current.country}</b>\n\n<code>${originalNumber}</code>`;
+        
         
         // ⚡ বড় version (full format - current message)
         const bigFormat = currentMsg;
 
         // ⚡ Animation: ছোট→বড়→ছোট→বড়
-        
+        const frames = [smallFormat, bigFormat, smallFormat, bigFormat];
         
         let frameIndex = 0;
         const animationInterval = setInterval(async () => {
