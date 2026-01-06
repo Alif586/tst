@@ -140,6 +140,10 @@ let user_states = {};
 let admin_file_buffer = {};
 let last_change_time = {};
 
+// ⚡ User verification cache (5 minute)
+let user_verification_cache = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 // 🔥 নতুন: অ্যাসাইনমেন্ট লক সিস্টেম (প্রতি দেশের জন্য)
 let country_assignment_locks = {};
 
@@ -367,6 +371,12 @@ function isAdmin(userId) {
 async function isUserMember(userId) {
     if (isAdmin(userId)) return true;
 
+    // ⚡ Check cache first
+    const now = Date.now();
+    if (user_verification_cache[userId] && (now - user_verification_cache[userId].time) < CACHE_DURATION) {
+        return user_verification_cache[userId].status;
+    }
+
     const validStatuses = ['member', 'administrator', 'creator'];
 
     const checkPromises = REQUIRED_CHANNELS.map(channel => 
@@ -376,7 +386,12 @@ async function isUserMember(userId) {
     );
 
     const results = await Promise.all(checkPromises);
-    return results.every(result => result === true);
+    const isMember = results.every(result => result === true);
+    
+    // ⚡ Save to cache
+    user_verification_cache[userId] = { status: isMember, time: now };
+    
+    return isMember;
 }
 
 function getAvailableCountriesData() {
@@ -882,6 +897,9 @@ bot.on('callback_query', async (call) => {
     const msgId = call.message.message_id;
     const chatId = call.message.chat.id;
 
+    // ⚡ INSTANT RESPONSE - NO LAG
+    bot.answerCallbackQuery(call.id).catch(() => {});
+
     if (data === 'verify_check') {
         if (await isUserMember(userId)) {
             await safeEditMessage(chatId, msgId, "✅ Verified!");
@@ -1013,90 +1031,71 @@ bot.on('callback_query', async (call) => {
         }
     }
 
-    // 🔥 CHANGE NUMBER WITH FAST SMOOTH ANIMATION
     else if (data === 'change_number_req') {
-        const currentTime = Date.now() / 1000;
-        const lastTime = last_change_time[userId] || 0;
-        const timeDiff = currentTime - lastTime;
-        const cooldownTime = 3;
+    const currentTime = Date.now() / 1000;
+    const lastTime = last_change_time[userId] || 0;
+    const timeDiff = currentTime - lastTime;
+    const cooldownTime = 3;
 
-        if (timeDiff < cooldownTime) {
-            const remaining = Math.ceil(cooldownTime - timeDiff);
-            bot.answerCallbackQuery(call.id, { text: `⏳ Please wait ${remaining} seconds before changing again!`, show_alert: true });
+    if (timeDiff < cooldownTime) {
+        const remaining = Math.ceil(cooldownTime - timeDiff);
+        bot.answerCallbackQuery(call.id, { text: `⏳ Please wait ${remaining} seconds!`, show_alert: true });
+        return;
+    }
+
+    last_change_time[userId] = currentTime;
+
+    // ⚡ NO ANIMATION - INSTANT RESPONSE
+    const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
+
+    if (current) {
+        const country = current.country;
+
+        if (!country_assignment_locks[country]) {
+            country_assignment_locks[country] = new Set();
+        }
+
+        if (country_assignment_locks[country].has(userId)) {
+            await safeEditMessage(chatId, msgId, "⏳ Already processing...");
             return;
         }
 
-        last_change_time[userId] = currentTime;
+        country_assignment_locks[country].add(userId);
 
-        const animationFrames = [
-    "🔄 <b>Changing Number...</b>\n━━━━━━━━━━━━\n⬇️ Processing..."
-];
+        try {
+            const [_, availableNumbers] = await Promise.all([
+                NumberModel.updateOne(
+                    { _id: current._id },
+                    { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } }
+                ),
+                NumberModel.aggregate([
+                    { $match: { country: country, status: 'Available' } },
+                    { $sample: { size: 1 } }
+                ])
+            ]);
 
-        let frameIndex = 0;
-        const animationInterval = setInterval(async () => {
-            try {
-                await safeEditMessage(chatId, msgId, animationFrames[frameIndex], { parse_mode: 'HTML' });
-                frameIndex++;
-                if (frameIndex >= animationFrames.length) {
-                    clearInterval(animationInterval);
-                }
-            } catch (e) {}
-        }, 100);  // 800ms থেকে 400ms করলাম (দ্বিগুণ দ্রুত)
+            if (availableNumbers.length > 0) {
+                const newNumber = await NumberModel.findByIdAndUpdate(
+                    availableNumbers[0]._id,
+                    { $set: { status: 'Used', assigned_to: userId, assigned_at: new Date() } },
+                    { new: true }
+                );
 
-        const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
-
-        setTimeout(async () => {
-            clearInterval(animationInterval);
-
-            if (current) {
-                const country = current.country;
-
-                if (!country_assignment_locks[country]) {
-                    country_assignment_locks[country] = new Set();
-                }
-
-                if (country_assignment_locks[country].has(userId)) {
-                    await safeEditMessage(chatId, msgId, "⏳ Already processing...");
-                    return;
-                }
-
-                country_assignment_locks[country].add(userId);
-
-                try {
-                    const [_, availableNumbers] = await Promise.all([
-                        NumberModel.updateOne(
-                            { _id: current._id },
-                            { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } }
-                        ),
-                        NumberModel.aggregate([
-                            { $match: { country: country, status: 'Available' } },
-                            { $sample: { size: 1 } }
-                        ])
-                    ]);
-
-                    if (availableNumbers.length > 0) {
-                        const newNumber = await NumberModel.findByIdAndUpdate(
-                            availableNumbers[0]._id,
-                            { $set: { status: 'Used', assigned_to: userId, assigned_at: new Date() } },
-                            { new: true }
-                        );
-
-                        let displayNum = newNumber.number.startsWith('+') ? newNumber.number : '+' + newNumber.number;
-                        await safeEditMessage(chatId, msgId, ASSIGNMENT_MESSAGE_TEMPLATE(newNumber.flag, newNumber.country, displayNum, "Changed", NEW_FOOTER_QUOTE),
-                            { parse_mode: 'HTML', reply_markup: getNumberControlKeyboard() });
-                    } else {
-                        await safeEditMessage(chatId, msgId, `❌ No numbers left in ${country}.`, {
-                            reply_markup: { inline_keyboard: [[{ text: "🌍 Change Country", callback_data: 'change_country_start' }]] }
-                        });
-                    }
-                } finally {
-                    country_assignment_locks[country].delete(userId);
-                }
+                let displayNum = newNumber.number.startsWith('+') ? newNumber.number : '+' + newNumber.number;
+                await safeEditMessage(chatId, msgId, ASSIGNMENT_MESSAGE_TEMPLATE(newNumber.flag, newNumber.country, displayNum, "Changed", NEW_FOOTER_QUOTE),
+                    { parse_mode: 'HTML', reply_markup: getNumberControlKeyboard() });
             } else {
-                await safeEditMessage(chatId, msgId, "❌ No active number.");
+                await safeEditMessage(chatId, msgId, `❌ No numbers left in ${country}.`, {
+                    reply_markup: { inline_keyboard: [[{ text: "🌍 Change Country", callback_data: 'change_country_start' }]] }
+                });
             }
-        }, 200);  // 900ms থেকে 500ms করলাম
+        } finally {
+            country_assignment_locks[country].delete(userId);
+        }
+    } else {
+        await safeEditMessage(chatId, msgId, "❌ No active number.");
     }
+}
 
     else if (data === 'change_country_start') {
         await NumberModel.updateMany(
