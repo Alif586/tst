@@ -1043,13 +1043,19 @@ bot.on('callback_query', async (call) => {
 
     if (timeDiff < cooldownTime) {
         const remaining = Math.ceil(cooldownTime - timeDiff);
-        bot.answerCallbackQuery(call.id, { text: `⏳ Please wait ${remaining} seconds!`, show_alert: true });
+        bot.answerCallbackQuery(call.id, { 
+            text: `⏳ Please wait ${remaining} seconds!`, 
+            show_alert: true 
+        });
         return;
     }
 
     last_change_time[userId] = currentTime;
 
-    const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
+    const current = await NumberModel.findOne({ 
+        assigned_to: userId, 
+        status: 'Used' 
+    });
 
     if (current) {
         const country = current.country;
@@ -1059,43 +1065,48 @@ bot.on('callback_query', async (call) => {
         }
 
         if (country_assignment_locks[country].has(userId)) {
-            bot.answerCallbackQuery(call.id, { text: "⏳ Processing...", show_alert: false });
+            bot.answerCallbackQuery(call.id, { 
+                text: "⏳ Processing...", 
+                show_alert: false 
+            });
             return;
         }
 
         country_assignment_locks[country].add(userId);
 
-        // ⚡ Get current message text (যা এখন screen এ আছে)
-        const currentMsg = call.message.text || call.message.caption || "";
-        
-        // ⚡ ছোট version (শুধু number দেখাবে)
-        const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
-        const smallFormat = `${current.flag} <b>${current.country}</b>\n\n<code>${originalNumber}</code>`;
-        
-        // ⚡ বড় version (full format - current message)
-        const bigFormat = currentMsg;
+        // ⚡ Current message (big format)
+        const bigFormat = call.message.text || call.message.caption || "";
 
-        // ⚡ Animation: ছোট→বড়→ছোট→বড়
-        const frames = [smallFormat, bigFormat, smallFormat, bigFormat];
-        
-        let frameIndex = 0;
-        const animationInterval = setInterval(async () => {
-            if (frameIndex < frames.length) {
+        // ⚡ Small format
+        const originalNumber = current.number.startsWith('+') 
+            ? current.number 
+            : '+' + current.number;
+
+        const smallFormat = `${current.flag} <b>${current.country}</b>\n\n<code>${originalNumber}</code>`;
+
+        // ⚡ Smooth animation: small → big (ONE TIME)
+        try {
+            await safeEditMessage(chatId, msgId, smallFormat, { parse_mode: 'HTML' });
+
+            setTimeout(async () => {
                 try {
-                    await safeEditMessage(chatId, msgId, frames[frameIndex], { parse_mode: 'HTML' });
+                    await safeEditMessage(chatId, msgId, bigFormat, { parse_mode: 'HTML' });
                 } catch (e) {}
-                frameIndex++;
-            } else {
-                clearInterval(animationInterval);
-            }
-        }, 300); // 250ms x 4 = 1 second total
+            }, 180); // 🔥 very fast pulse animation
+        } catch (e) {}
 
         try {
-            // ⚡ Database কাজ background এ
+            // ⚡ Background DB work
             const [_, availableNumbers] = await Promise.all([
                 NumberModel.updateOne(
                     { _id: current._id },
-                    { $set: { status: 'Used_History', assigned_to: null, assigned_at: null } }
+                    { 
+                        $set: { 
+                            status: 'Used_History', 
+                            assigned_to: null, 
+                            assigned_at: null 
+                        } 
+                    }
                 ),
                 NumberModel.aggregate([
                     { $match: { country: country, status: 'Available' } },
@@ -1103,27 +1114,59 @@ bot.on('callback_query', async (call) => {
                 ])
             ]);
 
-            // ⚡ Animation শেষ হওয়ার জন্য wait
-            await new Promise(resolve => setTimeout(resolve, 1050));
-            clearInterval(animationInterval);
+            // ⚡ Wait for animation to finish
+            await new Promise(resolve => setTimeout(resolve, 220));
 
             if (availableNumbers.length > 0) {
                 const newNumber = await NumberModel.findByIdAndUpdate(
                     availableNumbers[0]._id,
-                    { $set: { status: 'Used', assigned_to: userId, assigned_at: new Date() } },
+                    { 
+                        $set: { 
+                            status: 'Used', 
+                            assigned_to: userId, 
+                            assigned_at: new Date() 
+                        } 
+                    },
                     { new: true }
                 );
 
-                let displayNum = newNumber.number.startsWith('+') ? newNumber.number : '+' + newNumber.number;
-                await safeEditMessage(chatId, msgId, ASSIGNMENT_MESSAGE_TEMPLATE(newNumber.flag, newNumber.country, displayNum, "Changed", NEW_FOOTER_QUOTE),
-                    { parse_mode: 'HTML', reply_markup: getNumberControlKeyboard() });
+                const displayNum = newNumber.number.startsWith('+') 
+                    ? newNumber.number 
+                    : '+' + newNumber.number;
+
+                await safeEditMessage(
+                    chatId,
+                    msgId,
+                    ASSIGNMENT_MESSAGE_TEMPLATE(
+                        newNumber.flag,
+                        newNumber.country,
+                        displayNum,
+                        "Changed",
+                        NEW_FOOTER_QUOTE
+                    ),
+                    { 
+                        parse_mode: 'HTML', 
+                        reply_markup: getNumberControlKeyboard() 
+                    }
+                );
             } else {
-                await safeEditMessage(chatId, msgId, `❌ No numbers left in ${country}.`, {
-                    reply_markup: { inline_keyboard: [[{ text: "🌍 Change Country", callback_data: 'change_country_start' }]] }
-                });
+                await safeEditMessage(
+                    chatId,
+                    msgId,
+                    `❌ No numbers left in ${country}.`,
+                    {
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { 
+                                    text: "🌍 Change Country", 
+                                    callback_data: 'change_country_start' 
+                                }
+                            ]]
+                        }
+                    }
+                );
             }
         } catch (error) {
-            clearInterval(animationInterval);
             console.error("Change number error:", error);
             await safeEditMessage(chatId, msgId, "❌ Error changing number.");
         } finally {
