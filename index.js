@@ -46,7 +46,7 @@ ${flag} <b>${country_name}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>
 ┗━━ <code>${number}</code> ━━┛
 
 ┏━━━━━━━━━━━━━┓ 
-  ⏳ 𝐖𝐚𝐢𝐭𝐢𝐧𝐠 𝐅𝐨𝐫 𝐎𝐓𝐏....
+    ⏳ 𝐖𝐚𝐢𝐭𝐢𝐧𝐠 𝐅𝐨𝐫 𝐎𝐓𝐏...  
 ┗━━━━━━━━━━━━━┛
 ━━━━━━━━━━━━━━━━━
 ${footer}
@@ -560,9 +560,9 @@ bot.on('message', async (msg) => {
                 
                 // 🔄 Git Pull & Restart করছি
                 const { exec } = require('child_process');
-                const BOT_PATH = '/home/alif/sms'; // 👈 আপনার path
+                const BOT_PATH = '/home/alif/tst'; // 👈 আপনার path
                 
-                exec(`cd ${BOT_PATH} && git reset --hard && git pull origin main && pm2 restart all`, (error, stdout, stderr) => {
+                exec(`cd ${BOT_PATH} && git reset --hard && git pull origin main && pm2 restart tst`, (error, stdout, stderr) => {
                     if (error) {
                         bot.sendMessage(chatId, `❌ **Restart Failed!**\n\n<pre>${error.message}</pre>`, { 
                             parse_mode: 'HTML',
