@@ -1068,10 +1068,7 @@ bot.on('callback_query', async (call) => {
         // ⚡ SMOOTH SCALE ANIMATION - Pure Visual (ছোট→বড়→ছোট→বড়)
         const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
         
-        const scaleFrames = [
-            // Frame 1: ছোট (50% size)
-            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`
-        ];
+        
 
         // ⚡ Start animation in background
         let frameIndex = 0;
@@ -1084,7 +1081,7 @@ bot.on('callback_query', async (call) => {
             } else {
                 clearInterval(animationInterval);
             }
-        }, 90); // 200ms per frame = 0.8 second total
+        }, 200); // 200ms per frame = 0.8 second total
 
         try {
             // ⚡ Parallel database operations
