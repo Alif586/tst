@@ -1030,8 +1030,12 @@ bot.on('callback_query', async (call) => {
             country_assignment_locks[country].delete(userId);
         }
     }
+    
+    
+    
 
-   else if (data === 'change_number_req') {
+    // 🔥 CHANGE NUMBER WITH FAST SMOOTH ANIMATION
+    else if (data === 'change_number_req') {
     const currentTime = Date.now() / 1000;
     const lastTime = last_change_time[userId] || 0;
     const timeDiff = currentTime - lastTime;
@@ -1045,7 +1049,6 @@ bot.on('callback_query', async (call) => {
 
     last_change_time[userId] = currentTime;
 
-    // ⚡ NO ANIMATION - INSTANT RESPONSE
     const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
 
     if (current) {
@@ -1056,13 +1059,44 @@ bot.on('callback_query', async (call) => {
         }
 
         if (country_assignment_locks[country].has(userId)) {
-            await safeEditMessage(chatId, msgId, "⏳ Already processing...");
+            bot.answerCallbackQuery(call.id, { text: "⏳ Processing...", show_alert: false });
             return;
         }
 
         country_assignment_locks[country].add(userId);
 
+        // ⚡ SMOOTH SCALE ANIMATION - Pure Visual (ছোট→বড়→ছোট→বড়)
+        const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
+        
+        const scaleFrames = [
+            // Frame 1: ছোট (50% size)
+            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`,
+            
+            // Frame 2: বড় (100% size - original format)
+            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:\n┗━━ <code>${originalNumber}</code> ━━┛\n\n━━━━━━━━━━━━━`,
+            
+            // Frame 3: ছোট again
+            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 <b>𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:</b>\n<code>${originalNumber}</code>`,
+            
+            // Frame 4: বড় (final before new number)
+            `${current.flag} <b>${current.country}</b> 𝐅𝐫𝐞𝐬𝐡 𝐍𝐮𝐦𝐛𝐞𝐫 <b>Changing:</b>\n\n📱 𝐘𝐨𝐮𝐫 𝐍𝐮𝐦𝐛𝐞𝐫:\n┗━━ <code>${originalNumber}</code> ━━┛\n\n━━━━━━━━━━━━━`
+        ];
+
+        // ⚡ Start animation in background
+        let frameIndex = 0;
+        const animationInterval = setInterval(async () => {
+            if (frameIndex < scaleFrames.length) {
+                try {
+                    await safeEditMessage(chatId, msgId, scaleFrames[frameIndex], { parse_mode: 'HTML' });
+                } catch (e) {}
+                frameIndex++;
+            } else {
+                clearInterval(animationInterval);
+            }
+        }, 200); // 200ms per frame = 0.8 second total
+
         try {
+            // ⚡ Parallel database operations
             const [_, availableNumbers] = await Promise.all([
                 NumberModel.updateOne(
                     { _id: current._id },
@@ -1073,6 +1107,10 @@ bot.on('callback_query', async (call) => {
                     { $sample: { size: 1 } }
                 ])
             ]);
+
+            // ⚡ Wait for animation to complete (minimum 800ms)
+            await new Promise(resolve => setTimeout(resolve, 850));
+            clearInterval(animationInterval);
 
             if (availableNumbers.length > 0) {
                 const newNumber = await NumberModel.findByIdAndUpdate(
@@ -1089,6 +1127,10 @@ bot.on('callback_query', async (call) => {
                     reply_markup: { inline_keyboard: [[{ text: "🌍 Change Country", callback_data: 'change_country_start' }]] }
                 });
             }
+        } catch (error) {
+            clearInterval(animationInterval);
+            console.error("Change number error:", error);
+            await safeEditMessage(chatId, msgId, "❌ Error changing number.");
         } finally {
             country_assignment_locks[country].delete(userId);
         }
@@ -1096,6 +1138,7 @@ bot.on('callback_query', async (call) => {
         await safeEditMessage(chatId, msgId, "❌ No active number.");
     }
 }
+
 
     else if (data === 'change_country_start') {
         await NumberModel.updateMany(
