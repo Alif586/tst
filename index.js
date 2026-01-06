@@ -1069,7 +1069,8 @@ bot.on('callback_query', async (call) => {
         const currentMsg = call.message.text || call.message.caption || "";
         
         // ⚡ ছোট version (শুধু number দেখাবে)
-        
+        const originalNumber = current.number.startsWith('+') ? current.number : '+' + current.number;
+        const smallFormat = `${current.flag} <b>${current.country}</b>\n\n<code>${originalNumber}</code>`;
         
         // ⚡ বড় version (full format - current message)
         const bigFormat = currentMsg;
@@ -1087,7 +1088,7 @@ bot.on('callback_query', async (call) => {
             } else {
                 clearInterval(animationInterval);
             }
-        }, 250); // 250ms x 4 = 1 second total
+        }, 300); // 250ms x 4 = 1 second total
 
         try {
             // ⚡ Database কাজ background এ
