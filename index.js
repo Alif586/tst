@@ -1042,7 +1042,7 @@ bot.on('callback_query', async (call) => {
                     clearInterval(animationInterval);
                 }
             } catch (e) {}
-        }, 400);  // 800ms থেকে 400ms করলাম (দ্বিগুণ দ্রুত)
+        }, 100);  // 800ms থেকে 400ms করলাম (দ্বিগুণ দ্রুত)
 
         const current = await NumberModel.findOne({ assigned_to: userId, status: 'Used' });
 
